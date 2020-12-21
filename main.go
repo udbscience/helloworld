@@ -33,7 +33,12 @@ type Handler struct{}
 // HandleMessage reads the nsq message body and parses it as a github webhook,
 // checks out the source for the repository & executes the given script in the source tree.
 func (h *Handler) HandleMessage(m *nsq.Message) error {
+	// logrus.Debugf("Error parsing hook: %v", string(m.Body))
 	script := "gcloud builds submit . --async"
+	// j, _ := simplejson.NewJson(m.Body)
+	// data, _ := j.Get("hook").Encode()
+	// logrus.Debugf("Error parsing hook: %v", string(data))
+	// hook, err := octokat.ParseHook(data)
 	hook, err := octokat.ParseHook(m.Body)
 	if err != nil {
 		// Errors will most likely occur because not all GH
@@ -50,12 +55,16 @@ func (h *Handler) HandleMessage(m *nsq.Message) error {
 	shortSha := hook.After[0:7]
 	workerPool := "--worker-pool=projects/mlb-xpn-shared-9d4c/locations/us-central1/workerPools/builder-pool"
 	gcsLogDir := "--gcs-log-dir=gs://mlb-xpn-shared-9d4c_cloudbuild/builder"
+	tagName := ""
 	substitutions := "--substitutions="
 	substitutions = substitutions + fmt.Sprintf("REPO_NAME=%s,", hook.Repo.Name)
 	substitutions = substitutions + fmt.Sprintf("BRANCH_NAME=%s,", hook.Branch())
 	substitutions = substitutions + fmt.Sprintf("COMMIT_SHA=%s,", hook.After)
 	substitutions = substitutions + fmt.Sprintf("SHORT_SHA=%s,", shortSha)
-	substitutions = substitutions + fmt.Sprintf("TAG_NAME=%s", "")
+	if hook.IsTag() {
+		tagName = hook.Ref
+	}
+	substitutions = substitutions + fmt.Sprintf("TAG_NAME=%s", tagName)
 
 	temp, err := ioutil.TempDir("", fmt.Sprintf("nsqexec-commit-%s", shortSha))
 	if err != nil {
@@ -131,14 +140,14 @@ func ProcessQueue(handler nsq.Handler, opts QueueOpts) error {
 // checkout `git clones` a repo
 func checkout(temp, repo, sha string) error {
 	// don't clone the whole repo, it's too slow
-	cmd := exec.Command("git", "clone", "--depth=100", "--recursive", "--branch=master", repo, temp)
+	cmd := exec.Command("echo", "git", "clone", "--depth=100", "--recursive", "--branch=master", repo, temp)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Running command failed: %s, %v", string(output), err)
 	}
 
 	// checkout a commit (or branch or tag) of interest
-	cmd = exec.Command("git", "checkout", "-qf", sha)
+	cmd = exec.Command("echo", "git", "checkout", "-qf", sha)
 	cmd.Dir = temp
 	output, err = cmd.CombinedOutput()
 	if err != nil {
@@ -166,5 +175,9 @@ func main() {
 	if version {
 		fmt.Println(VERSION)
 		return
+	}
+	bb := &Handler{}
+	if err := ProcessQueue(bb, QueueOptsFromContext(topic, channel, lookupd)); err != nil {
+		logrus.Fatal(err)
 	}
 }
