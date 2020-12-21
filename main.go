@@ -33,12 +33,8 @@ type Handler struct{}
 // HandleMessage reads the nsq message body and parses it as a github webhook,
 // checks out the source for the repository & executes the given script in the source tree.
 func (h *Handler) HandleMessage(m *nsq.Message) error {
-	// logrus.Debugf("Error parsing hook: %v", string(m.Body))
+	logrus.Debugf("parsing hook: %v", string(m.Body))
 	script := "gcloud builds submit . --async"
-	// j, _ := simplejson.NewJson(m.Body)
-	// data, _ := j.Get("hook").Encode()
-	// logrus.Debugf("Error parsing hook: %v", string(data))
-	// hook, err := octokat.ParseHook(data)
 	hook, err := octokat.ParseHook(m.Body)
 	if err != nil {
 		// Errors will most likely occur because not all GH
@@ -49,9 +45,9 @@ func (h *Handler) HandleMessage(m *nsq.Message) error {
 	}
 
 	// we only care about pushes to master
-	if hook.Branch() != "master" {
-		return nil
-	}
+	// if hook.Branch() != "master" {
+	// 	return nil
+	// }
 	shortSha := hook.After[0:7]
 	workerPool := "--worker-pool=projects/mlb-xpn-shared-9d4c/locations/us-central1/workerPools/builder-pool"
 	gcsLogDir := "--gcs-log-dir=gs://mlb-xpn-shared-9d4c_cloudbuild/builder"
@@ -70,7 +66,7 @@ func (h *Handler) HandleMessage(m *nsq.Message) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(temp)
+	//defer os.RemoveAll(temp)
 
 	if err := checkout(temp, hook.Repo.URL, hook.After); err != nil {
 		return err
@@ -78,12 +74,13 @@ func (h *Handler) HandleMessage(m *nsq.Message) error {
 	logrus.Debugf("Checked out %s for %s", hook.After, hook.Repo.URL)
 
 	// execute the script
-	cmd := exec.Command(script, workerPool, gcsLogDir, substitutions)
+	cmd := exec.Command("echo", script, workerPool, gcsLogDir, substitutions)
 	cmd.Dir = temp
 	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("Running script %s failed with output: %s\nerror: %v", script, string(out), err)
 	}
+
 	logrus.Debugf("Output of %s: %s", script, string(out))
 
 	return nil
