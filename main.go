@@ -68,7 +68,7 @@ func (h *Handler) HandleMessage(m *nsq.Message) error {
 	}
 	//defer os.RemoveAll(temp)
 
-	if err := checkout(temp, hook.Repo.URL, hook.After); err != nil {
+	if err := checkout(temp, hook.Repo.URL, hook.After, hook.Branch()); err != nil {
 		return err
 	}
 	logrus.Debugf("Checked out %s for %s", hook.After, hook.Repo.URL)
@@ -135,16 +135,16 @@ func ProcessQueue(handler nsq.Handler, opts QueueOpts) error {
 }
 
 // checkout `git clones` a repo
-func checkout(temp, repo, sha string) error {
+func checkout(temp, repo, sha, branch string) error {
 	// don't clone the whole repo, it's too slow
-	cmd := exec.Command("echo", "git", "clone", "--depth=100", "--recursive", "--branch=master", repo, temp)
+	cmd := exec.Command("git", "clone", "--depth=100", "--recursive", "--branch="+branch, repo, temp)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Running command failed: %s, %v", string(output), err)
 	}
 
 	// checkout a commit (or branch or tag) of interest
-	cmd = exec.Command("echo", "git", "checkout", "-qf", sha)
+	cmd = exec.Command("git", "checkout", "-qf", sha)
 	cmd.Dir = temp
 	output, err = cmd.CombinedOutput()
 	if err != nil {
