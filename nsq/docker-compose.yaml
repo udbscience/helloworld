@@ -21,8 +21,8 @@ services:
       - nsqlookupd  
     ports:
       - "4171:4171"
-  nsqtail:
-    image: nsqio/nsq
-    command: /nsq_tail --lookupd-http-address=nsqlookupd:4161 -topic test
-    depends_on:
-      - nsqlookupd 
+#   nsqtail:
+#     image: nsqio/nsq
+#     command: /nsq_tail --lookupd-http-address=nsqlookupd:4161 -topic test
+#     depends_on:
+#       - nsqlookupd 
